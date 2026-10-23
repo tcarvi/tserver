@@ -19,31 +19,24 @@ func newAPIHandler(config apiConfig) (http.Handler, error) {
 	if config.requestsPerSecond <= 0 || config.rateBurst < 1 || config.maxBodyBytes < 1 {
 		return nil, errors.New("rate limits and request body limit must be positive")
 	}
+	if _, err := parsePythonAPIURL(config.pythonAPIURL); err != nil {
+		return nil, err
+	}
 
-	api := http.Handler(http.HandlerFunc(tServeAPI))
+	api := newTestResultsHandler(config.pythonAPIURL)
 	api = bodyLimitMiddleware(config.maxBodyBytes, api)
 	api = permissionMiddleware("api:read", api)
 	api = jwtMiddleware(config.jwtSecret, config.jwtIssuer, api)
+	api = corsMiddleware(config.allowedOrigins, api)
 	api = rateLimitMiddleware(newIPRateLimiter(config.requestsPerSecond, config.rateBurst), api)
 
 	mux := http.NewServeMux()
-	mux.Handle("/api", api)
-	mux.Handle("/api/", api)
+	mux.Handle("/api/test-results", api)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		writeAPIError(w, http.StatusNotFound, "route not found")
+	})
 
-	return corsMiddleware(config.allowedOrigins, mux), nil
-}
-
-func tServeAPI(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet && r.Method != http.MethodHead {
-		w.Header().Set("Allow", "GET, HEAD")
-		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Content-Language", "pt-br")
-	w.Header().Set("key-Code", "00000000001")
-	http.ServeFile(w, r, "github.com/tcarvi"+r.URL.Path)
+	return requestLoggingMiddleware(mux), nil
 }
 
 func main() {

@@ -29,6 +29,7 @@ const (
 type apiConfig struct {
 	jwtSecret         []byte
 	jwtIssuer         string
+	pythonAPIURL      string
 	allowedOrigins    map[string]struct{}
 	requestsPerSecond rate.Limit
 	rateBurst         int
@@ -58,6 +59,10 @@ func apiConfigFromEnv() (apiConfig, error) {
 	if issuer == "" {
 		return apiConfig{}, errors.New("JWT_ISSUER is required")
 	}
+	pythonAPIURL := strings.TrimSpace(os.Getenv("PYTHON_API_URL"))
+	if _, err := parsePythonAPIURL(pythonAPIURL); err != nil {
+		return apiConfig{}, err
+	}
 
 	origins, err := parseAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
 	if err != nil {
@@ -80,6 +85,7 @@ func apiConfigFromEnv() (apiConfig, error) {
 	return apiConfig{
 		jwtSecret:         secret,
 		jwtIssuer:         issuer,
+		pythonAPIURL:      pythonAPIURL,
 		allowedOrigins:    origins,
 		requestsPerSecond: rate.Limit(requestsPerSecond),
 		rateBurst:         rateBurst,
@@ -216,7 +222,7 @@ func bodyLimitMiddleware(maxBytes int64, next http.Handler) http.Handler {
 
 func corsMiddleware(allowedOrigins map[string]struct{}, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") {
+		if r.URL.Path != "/api/test-results" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -243,7 +249,7 @@ func corsMiddleware(allowedOrigins map[string]struct{}, next http.Handler) http.
 			return
 		}
 
-		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD")
+		w.Header().Set("Access-Control-Allow-Methods", "POST")
 		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 		w.Header().Set("Access-Control-Max-Age", "600")
 		w.WriteHeader(http.StatusNoContent)
@@ -251,7 +257,7 @@ func corsMiddleware(allowedOrigins map[string]struct{}, next http.Handler) http.
 }
 
 func allowedCORSMethod(method string) bool {
-	return method == http.MethodGet || method == http.MethodHead
+	return method == http.MethodPost
 }
 
 func allowedCORSHeaders(value string) bool {
