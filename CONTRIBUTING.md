@@ -127,6 +127,23 @@ export PYTHON_API_URL="http://127.0.0.1:8000/api/test-results"
 go120 run ./cmd/api
 ```
 
+Execute esses comandos no mesmo terminal. Se o processo terminar com
+`JWT_SECRET must contain at least 32 bytes`, a variável está ausente ou tem
+menos de 32 bytes no ambiente daquele processo. Gere e exporte um segredo
+local (não use o valor placeholder de `configs/example.env`):
+
+```sh
+export JWT_SECRET="$(openssl rand -hex 32)"
+export JWT_ISSUER="tserver-local"
+export PYTHON_API_URL="http://127.0.0.1:8000/api/test-results"
+go120 run ./cmd/api
+```
+
+Não imprima nem compartilhe o valor de `JWT_SECRET`. Depois de corrigir essa
+variável, o startup também exige `JWT_ISSUER` não vazio e uma `PYTHON_API_URL`
+absoluta HTTP(S) válida. A validação dessas configurações é intencional: o
+servidor não inicia com credenciais padrão ou autenticação desabilitada.
+
 Use um token emitido por uma identidade confiável que inclua `iss`, `sub`, `exp` e `api:read`, por exemplo na claim `permissions` ou `scope`. Não use o segredo de exemplo em ambiente compartilhado e não versione credenciais.
 
 Exemplo de chamada:
