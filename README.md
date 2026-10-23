@@ -1,23 +1,24 @@
 # tserver
 
-API-only HTTP gateway written in Go. Its only contract is
-`POST /api/test-results` with `{"application":"…","version":"…"}`. The
-request is forwarded to a Python API, which processes the test-result lookup
-and returns the JSON response. The server has no static-file routes or other
-API contracts.
+API-only HTTP gateway written in Go. Its asynchronous contract is:
 
-The request must be exactly one JSON object with non-empty string fields
-`application` and `version` (up to 128 bytes each). Unknown fields, additional
-JSON values, or a body larger than the configured limit are rejected. The
-Python response must be valid JSON and no larger than 4 MiB; its JSON body and
-HTTP status below 500 are returned without reshaping. Upstream 5xx, timeouts,
-and invalid responses become a generic JSON `502` response.
+- `POST /api/test-runs` accepts `{"application":"…","version":"…"}` and returns `202` with a `test_id`, current `status`, and `status_url`.
+- `GET /api/test-runs/{test_id}` returns the run status and, when complete, its test results.
 
-Every `POST /api/test-results` request requires a signed JWT with valid `iss`,
-`sub`, and `exp` claims and the `api:read` permission. The permission may be
-supplied in a `permissions` array or in the OAuth-style, space-separated
-`scope` claim. The CORS preflight `OPTIONS` request is exempt from JWT
-authentication.
+Run states are `queued`, `running`, `completed`, and `failed`. The response DTO
+contains only public run metadata and the result JSON; it does not expose
+credentials. The exact result payload schema remains owned by the Python test
+service. See [api/openapi.yaml](api/openapi.yaml) for the contract.
+
+**Implementation status:** these DTOs and the OpenAPI document define the
+asynchronous contract. The current HTTP handler still implements the earlier
+synchronous `POST /api/test-results` flow; route and Python job-endpoint wiring
+must be updated before the new routes are available at runtime.
+
+The live legacy endpoint requires a signed JWT with valid `iss`, `sub`, and
+`exp` claims and the `api:read` permission. The permission may be supplied in a
+`permissions` array or in the OAuth-style, space-separated `scope` claim. CORS
+preflight is exempt from JWT authentication.
 
 JWTs must use HS256. `JWT_SECRET` must contain at least 32 bytes and
 `JWT_ISSUER` must match the token issuer. The service fails at startup if
@@ -35,6 +36,12 @@ CORS is disabled unless `CORS_ALLOWED_ORIGINS` contains exact,
 comma-separated origins, such as `https://app.example.com`. Preflight is
 handled after the IP rate limit and before JWT authentication. It permits only
 `POST` and the `Authorization` and `Content-Type` headers.
+
+The request body must be exactly one JSON object with non-empty string fields
+`application` and `version` (up to 128 bytes each). Unknown fields, additional
+JSON values, or a body larger than the configured limit are rejected. Python
+responses must be valid JSON and no larger than 4 MiB. Upstream 5xx, timeouts,
+and invalid responses become a generic JSON `502` response.
 
 Every request receives an `X-Request-ID`. Structured logs include the request
 ID, method, path, response status, duration, application, version, and Python
@@ -80,15 +87,20 @@ contain `iss`, `sub`, `exp`, and either `"permissions":["api:read"]` or
 `"scope":"api:read"`. The request body accepts exactly the `application` and
 `version` string fields; unknown fields and additional JSON values are rejected.
 
-Example request (replace the token with one issued by the configured identity
-provider):
+Contract examples (replace the token with one issued by the configured identity
+provider; these asynchronous routes are not yet wired to the runtime handler):
 
 ```sh
-curl -X POST http://localhost:8080/api/test-results \
+curl -i -X POST http://localhost:8080/api/test-runs \
 	-H "Authorization: Bearer $ACCESS_TOKEN" \
 	-H "Content-Type: application/json" \
 	-d '{"application":"inventory","version":"1.2.3"}'
+
+curl -i http://localhost:8080/api/test-runs/run-123 \
+	-H "Authorization: Bearer $ACCESS_TOKEN"
 ```
+
+The first response is `202 Accepted`, for example `{"test_id":"run-123","status":"queued","status_url":"/api/test-runs/run-123"}`. The GET response reports the current status and includes `results` after completion.
 
 ## Docker
 

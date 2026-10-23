@@ -39,8 +39,8 @@ func NewClient(endpoint string) (*Client, error) {
 	}, nil
 }
 
-func (c *Client) FetchTestResults(ctx context.Context, application, version, requestID string) (dtoresponse.TestResults, int, error) {
-	requestBody, err := json.Marshal(dtorequest.TestResults{Application: application, Version: version})
+func (c *Client) FetchTestResults(ctx context.Context, application, version, requestID string) (dtoresponse.PythonResult, int, error) {
+	requestBody, err := json.Marshal(dtorequest.StartTest{Application: application, Version: version})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -73,7 +73,7 @@ func (c *Client) FetchTestResults(ctx context.Context, application, version, req
 	if int64(len(body)) > maxResponseBytes || !json.Valid(body) {
 		return nil, response.StatusCode, errors.New("Python API returned an invalid JSON response")
 	}
-	results, err := dtoresponse.NewTestResults(body)
+	results, err := dtoresponse.NewPythonResult(body)
 	if err != nil {
 		return nil, response.StatusCode, err
 	}

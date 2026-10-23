@@ -13,7 +13,7 @@ import (
 )
 
 type ResultsService interface {
-	Get(ctx context.Context, application, version, requestID string) (dtoresponse.TestResults, int, error)
+	Get(ctx context.Context, application, version, requestID string) (dtoresponse.PythonResult, int, error)
 }
 
 type TestResults struct {
@@ -38,7 +38,7 @@ func (h *TestResults) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	var request request.TestResults
+	var request request.StartTest
 	if err := decoder.Decode(&request); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request JSON")
 		return

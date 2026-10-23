@@ -7,7 +7,7 @@ import (
 )
 
 type ResultsRepository interface {
-	FetchTestResults(ctx context.Context, application, version, requestID string) (dtoresponse.TestResults, int, error)
+	FetchTestResults(ctx context.Context, application, version, requestID string) (dtoresponse.PythonResult, int, error)
 }
 
 type TestResults struct {
@@ -18,6 +18,6 @@ func NewTestResults(repository ResultsRepository) *TestResults {
 	return &TestResults{repository: repository}
 }
 
-func (s *TestResults) Get(ctx context.Context, application, version, requestID string) (dtoresponse.TestResults, int, error) {
+func (s *TestResults) Get(ctx context.Context, application, version, requestID string) (dtoresponse.PythonResult, int, error) {
 	return s.repository.FetchTestResults(ctx, application, version, requestID)
 }

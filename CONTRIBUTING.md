@@ -2,9 +2,18 @@
 
 ## Visão geral
 
-O `tserver` é um gateway HTTP API-only escrito em Go. Seu único contrato é `POST /api/test-results`, com JSON contendo `application` e `version`. A solicitação é encaminhada para um serviço Python configurado; a resposta JSON processada pelo Python é retornada ao cliente. Não há rotas para arquivos ou outros contratos.
+O `tserver` é um gateway HTTP API-only escrito em Go. O contrato assíncrono definido tem dois passos:
 
-O corpo aceito tem exatamente este formato: `{"application":"inventory","version":"1.2.3"}`. `application` e `version` devem ser strings não vazias com até 128 bytes. Campos extras, JSON adicional e bodies acima de `MAX_REQUEST_BODY_BYTES` são rejeitados. O upstream deve responder com JSON válido de até 4 MiB; seu status abaixo de 500 e o corpo JSON são repassados sem transformação. Respostas não JSON, timeout, payload de resposta inválido e erros 5xx viram `502` genérico, sem detalhes internos. O timeout do upstream é de 15 segundos e redirects não são seguidos.
+1. `POST /api/test-runs` recebe `application` e `version`; responde `202` com `test_id`, `status` e `status_url`.
+2. `GET /api/test-runs/{test_id}` consulta os estados `queued`, `running`, `completed` ou `failed` e, quando concluído, o JSON dos resultados.
+
+Os DTOs estão em `internal/dto/request` e `internal/dto/response`; a especificação está em `api/openapi.yaml`. `TestResults.Results` permanece JSON opaco porque o schema dos resultados pertence ao serviço Python. Os DTOs de resposta expõem somente metadados públicos e resultados, nunca credenciais.
+
+**Estado da implementação:** os DTOs e a OpenAPI definem o contrato assíncrono, mas o handler ainda implementa o fluxo síncrono legado `POST /api/test-results`. A atualização das rotas e dos endpoints de jobs no Python é uma etapa separada; não assuma que as novas rotas já estão operacionais.
+
+O request de início usa exatamente `{"application":"inventory","version":"1.2.3"}`. Os campos devem ser strings não vazias com até 128 bytes. Campos extras, JSON adicional e bodies acima de `MAX_REQUEST_BODY_BYTES` são rejeitados. Na integração síncrona atual, o upstream deve responder com JSON válido de até 4 MiB; seu status abaixo de 500 e corpo JSON são repassados sem transformação. Respostas não JSON, timeout, payload inválido e erros 5xx viram `502` genérico. O timeout é de 15 segundos e redirects não são seguidos.
+
+No contrato assíncrono, `POST /api/test-runs` responde `202` com `test_id`, `status` e `status_url`. O cliente usa `GET /api/test-runs/{test_id}` para consultar o estado; `results` aparece quando `status` é `completed`.
 
 ## Organização do projeto
 
@@ -21,7 +30,7 @@ O corpo aceito tem exatamente este formato: `{"application":"inventory","version
 
 ## Segurança HTTP
 
-Todo `POST /api/test-results` exige um JWT HS256. O servidor valida assinatura, `iss`, `exp` e `sub`; o acesso exige a permissão `api:read`, extraída de `permissions` ou da claim OAuth `scope`. As claims e as permissões validadas ficam no contexto da requisição. O preflight CORS `OPTIONS` não exige JWT. O servidor não implementa descoberta OIDC nem busca de chaves JWKS para tokens RS256.
+As rotas definidas exigem JWT HS256. O servidor valida assinatura, `iss`, `exp` e `sub`; o acesso exige a permissão `api:read`, extraída de `permissions` ou da claim OAuth `scope`. As claims e as permissões validadas ficam no contexto da requisição. O preflight CORS `OPTIONS` não exige JWT. O servidor não implementa descoberta OIDC nem busca de chaves JWKS para tokens RS256.
 
 `JWT_SECRET` é obrigatório e deve ter ao menos 32 bytes; `JWT_ISSUER` também é obrigatório. O processo falha no startup se esses valores estiverem ausentes ou inválidos. Não use secrets padrão, registre tokens em logs ou versione chaves.
 
@@ -100,6 +109,6 @@ O container e o serviço Python precisam compartilhar uma rede Docker. Para alte
 
 ## Contribuições
 
-Mantenha as alterações compatíveis com Go 1.20.13 e preserve somente o contrato `POST /api/test-results`. Inclua testes para autenticação, validação do corpo, encaminhamento e respostas JSON do upstream, CORS, rate limit e limites de payload. Não registre tokens nem segredos.
+Mantenha as alterações compatíveis com Go 1.20.13 e preserve os contratos `POST /api/test-runs` e `GET /api/test-runs/{test_id}`. Inclua testes para autenticação, validação dos DTOs, estados do ciclo de execução e payload dos resultados. Não registre tokens nem segredos. Ao implementar as rotas, alinhe o contrato de jobs com o serviço Python antes de remover o handler síncrono legado.
 
 Ao alterar o contrato, atualize este guia e o `README.md` junto com os testes. Não adicione rotas ou formatos alternativos sem definir explicitamente o contrato antes.
