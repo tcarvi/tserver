@@ -6,33 +6,57 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
-type THandler struct{}
-
-func (THandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api" && !strings.HasPrefix(r.URL.Path, "/api/") {
-		http.NotFound(w, r)
-		return
+func newAPIHandler(config apiConfig) (http.Handler, error) {
+	if len(config.jwtSecret) < 32 {
+		return nil, errors.New("JWT_SECRET must contain at least 32 bytes")
+	}
+	if config.jwtIssuer == "" {
+		return nil, errors.New("JWT_ISSUER is required")
+	}
+	if config.requestsPerSecond <= 0 || config.rateBurst < 1 || config.maxBodyBytes < 1 {
+		return nil, errors.New("rate limits and request body limit must be positive")
 	}
 
-	tServeAPI(w, r)
+	api := http.Handler(http.HandlerFunc(tServeAPI))
+	api = bodyLimitMiddleware(config.maxBodyBytes, api)
+	api = permissionMiddleware("api:read", api)
+	api = jwtMiddleware(config.jwtSecret, config.jwtIssuer, api)
+	api = rateLimitMiddleware(newIPRateLimiter(config.requestsPerSecond, config.rateBurst), api)
+
+	mux := http.NewServeMux()
+	mux.Handle("/api", api)
+	mux.Handle("/api/", api)
+
+	return corsMiddleware(config.allowedOrigins, mux), nil
 }
 
 func tServeAPI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", "GET, HEAD")
+		writeAPIError(w, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+
 	w.Header().Set("Cache-Control", "no-cache")
-	// Message
 	w.Header().Set("Content-Language", "pt-br")
-	// Preserve the legacy API response marker.
 	w.Header().Set("key-Code", "00000000001")
-	//Serve Files
 	http.ServeFile(w, r, "github.com/tcarvi"+r.URL.Path)
 }
 
 func main() {
-	var d THandler
+	config, err := apiConfigFromEnv()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	handler, err := newAPIHandler(config)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	addr := os.Getenv("TSERVER_ADDR")
 	if addr == "" {
 		addr = ":8080"
@@ -40,8 +64,12 @@ func main() {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           d,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	log.Printf("tserver API listening on %s", addr)
