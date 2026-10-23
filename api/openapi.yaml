@@ -1,15 +1,15 @@
 openapi: 3.0.3
 info:
-  title: tserver Test Runs API
+  title: tserver Test Results API
   version: 1.0.0
-  description: Starts an asynchronous test run and exposes its status and result.
+  description: Authenticated gateway that synchronously forwards test-result requests to the Python API.
 servers:
   - url: http://localhost:8080
 paths:
-  /api/test-runs:
+  /api/test-results:
     post:
-      operationId: startTestRun
-      summary: Start testing an application version
+      operationId: getTestResults
+      summary: Get test results for an application version
       security:
         - bearerAuth: []
       requestBody:
@@ -17,59 +17,39 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/StartTest'
+              $ref: '#/components/schemas/TestResultsRequest'
             example:
               application: inventory
               version: 1.2.3
       responses:
-        '202':
-          description: Test run accepted and queued for processing.
+        '2XX':
+          description: Valid JSON response forwarded from the Python API.
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/TestStarted'
+              schema: {}
+        '3XX':
+          description: Valid JSON response forwarded from the Python API; redirects are not followed.
+          content:
+            application/json:
+              schema: {}
+        '4XX':
+          description: Valid JSON client response forwarded from the Python API.
+          content:
+            application/json:
+              schema: {}
         '400':
           $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
         '405':
           $ref: '#/components/responses/Error'
         '413':
           $ref: '#/components/responses/Error'
         '415':
-          $ref: '#/components/responses/Error'
-        '429':
-          $ref: '#/components/responses/Error'
-        '502':
-          $ref: '#/components/responses/Error'
-  /api/test-runs/{test_id}:
-    get:
-      operationId: getTestRunResults
-      summary: Get the state and result of a test run
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: test_id
-          in: path
-          required: true
-          schema:
-            type: string
-            minLength: 1
-            maxLength: 128
-      responses:
-        '200':
-          description: Current test status; results are present when completed.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TestResults'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
           $ref: '#/components/responses/Error'
         '429':
           $ref: '#/components/responses/Error'
@@ -82,7 +62,7 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
-    StartTest:
+    TestResultsRequest:
       type: object
       additionalProperties: false
       required: [application, version]
@@ -95,40 +75,6 @@ components:
           type: string
           minLength: 1
           maxLength: 128
-    TestStatus:
-      type: string
-      enum: [queued, running, completed, failed]
-    TestStarted:
-      type: object
-      additionalProperties: false
-      required: [test_id, status, status_url]
-      properties:
-        test_id:
-          type: string
-        status:
-          type: string
-          enum: [queued, running]
-        status_url:
-          type: string
-          format: uri-reference
-    TestResults:
-      type: object
-      additionalProperties: false
-      required: [test_id, application, version, status]
-      properties:
-        test_id:
-          type: string
-        application:
-          type: string
-        version:
-          type: string
-        status:
-          $ref: '#/components/schemas/TestStatus'
-        results:
-          type: object
-          additionalProperties: true
-        error:
-          type: string
   responses:
     Error:
       description: JSON error response.

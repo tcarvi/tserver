@@ -44,11 +44,20 @@ func TestTestResultsHandlerValidatesAndReturnsJSON(t *testing.T) {
 func TestRouterHasOnlyTestResultsContract(t *testing.T) {
 	service := &resultsServiceStub{response: dtoresponse.PythonResult(`{"ok":true}`), status: http.StatusOK}
 	router := NewRouter(NewTestResults(service))
-	for _, path := range []string{"/", "/api/other", "/api/test-results/extra"} {
+	for _, test := range []struct {
+		path       string
+		wantStatus int
+	}{
+		{path: "/api/test-results", wantStatus: http.StatusMethodNotAllowed},
+		{path: "/", wantStatus: http.StatusNotFound},
+		{path: "/api/other", wantStatus: http.StatusNotFound},
+		{path: "/api/test-results/extra", wantStatus: http.StatusNotFound},
+		{path: "/api/test-runs", wantStatus: http.StatusNotFound},
+	} {
 		response := httptest.NewRecorder()
-		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
-		if response.Code != http.StatusNotFound || !json.Valid(response.Body.Bytes()) {
-			t.Fatalf("%s: status=%d body=%s", path, response.Code, response.Body.String())
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, test.path, nil))
+		if response.Code != test.wantStatus || !json.Valid(response.Body.Bytes()) {
+			t.Fatalf("%s: status=%d, want=%d, body=%s", test.path, response.Code, test.wantStatus, response.Body.String())
 		}
 	}
 }
