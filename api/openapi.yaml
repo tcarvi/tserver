@@ -1,0 +1,82 @@
+openapi: 3.0.3
+info:
+  title: tserver Test Results Gateway
+  version: 1.0.0
+  description: Forwards a test-results lookup to the configured Python service.
+servers:
+  - url: http://localhost:8080
+paths:
+  /api/test-results:
+    post:
+      operationId: getTestResults
+      summary: Get test results for an application version
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [application, version]
+              properties:
+                application:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+                version:
+                  type: string
+                  minLength: 1
+                  maxLength: 128
+            example:
+              application: inventory
+              version: 1.2.3
+      responses:
+        '200':
+          description: JSON test results returned by the Python service.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '405':
+          $ref: '#/components/responses/Error'
+        '413':
+          $ref: '#/components/responses/Error'
+        '415':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
+        '502':
+          $ref: '#/components/responses/Error'
+        default:
+          description: JSON error or non-5xx JSON status returned by the Python service.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: JSON error response.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error]
+            properties:
+              error:
+                type: string

@@ -6,6 +6,19 @@ O `tserver` é um gateway HTTP API-only escrito em Go. Seu único contrato é `P
 
 O corpo aceito tem exatamente este formato: `{"application":"inventory","version":"1.2.3"}`. `application` e `version` devem ser strings não vazias com até 128 bytes. Campos extras, JSON adicional e bodies acima de `MAX_REQUEST_BODY_BYTES` são rejeitados. O upstream deve responder com JSON válido de até 4 MiB; seu status abaixo de 500 e o corpo JSON são repassados sem transformação. Respostas não JSON, timeout, payload de resposta inválido e erros 5xx viram `502` genérico, sem detalhes internos. O timeout do upstream é de 15 segundos e redirects não são seguidos.
 
+## Organização do projeto
+
+- `cmd/api`: bootstrap, injeção de dependências, servidor HTTP e encerramento gracioso.
+- `internal/config`: leitura e validação das variáveis de ambiente.
+- `internal/dto/request` e `internal/dto/response`: contratos de entrada e saída. O resultado de testes é encapsulado como JSON validado, sem inventar um schema de negócio que pertence ao serviço Python.
+- `internal/handler`: contrato HTTP, validação do payload e serialização JSON.
+- `internal/middleware`: autenticação/autorização, CORS, rate limit, limite de corpo, logs e headers de segurança.
+- `internal/service`: orquestração da consulta de resultados.
+- `internal/repository/python`: integração HTTP com o serviço Python. Não há banco local neste contrato.
+- `internal/pkg/jwt` e `internal/pkg/requestid`: utilitários internos de token e correlação.
+- `api/openapi.yaml`: especificação OpenAPI.
+- `configs/example.env`: exemplo sem credenciais reais.
+
 ## Segurança HTTP
 
 Todo `POST /api/test-results` exige um JWT HS256. O servidor valida assinatura, `iss`, `exp` e `sub`; o acesso exige a permissão `api:read`, extraída de `permissions` ou da claim OAuth `scope`. As claims e as permissões validadas ficam no contexto da requisição. O preflight CORS `OPTIONS` não exige JWT. O servidor não implementa descoberta OIDC nem busca de chaves JWKS para tokens RS256.
@@ -25,7 +38,7 @@ Cada request recebe `X-Request-ID`. O log estruturado registra request ID, méto
 O servidor escuta em `:8080` por padrão. A variável `TSERVER_ADDR` permite alterar o endereço, por exemplo:
 
 ```sh
-TSERVER_ADDR=127.0.0.1:8080 go120 run .
+TSERVER_ADDR=127.0.0.1:8080 go120 run ./cmd/api
 ```
 
 `PYTHON_API_URL` é obrigatório e deve apontar para a URL HTTP(S) completa do endpoint Python. O cliente usa timeout de 15 segundos e não segue redirects.
@@ -37,13 +50,13 @@ O módulo declara Go 1.20.13. Neste ambiente, o comando `go120` seleciona essa v
 ```sh
 GOTOOLCHAIN=go1.20.13 go test ./...
 GOTOOLCHAIN=go1.20.13 go vet ./...
-GOTOOLCHAIN=go1.20.13 go build ./...
+GOTOOLCHAIN=go1.20.13 go build -o /tmp/tserver-api ./cmd/api
 ```
 
 Para executar o servidor:
 
 ```sh
-go120 run .
+go120 run ./cmd/api
 ```
 
 Defina `JWT_SECRET` (mínimo de 32 bytes), `JWT_ISSUER` e `PYTHON_API_URL` antes de iniciar. Gere o segredo com `openssl rand -hex 32` e forneça-o por um gerenciador de secrets em ambientes compartilhados. Para permitir browser CORS, configure também `CORS_ALLOWED_ORIGINS` com as origens exatas.
@@ -64,6 +77,7 @@ Antes de enviar uma alteração, formate os arquivos Go e execute os testes e o 
 go120 fmt ./...
 go120 test ./...
 go120 vet ./...
+go120 build -o /tmp/tserver-api ./cmd/api
 ```
 
 ## Docker

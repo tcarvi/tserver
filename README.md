@@ -49,8 +49,22 @@ This module targets Go 1.20.13. In the local development environment, use the
 go120 version
 go120 test ./...
 go120 vet ./...
-go120 run .
+go120 build -o /tmp/tserver-api ./cmd/api
+go120 run ./cmd/api
 ```
+
+## Project layout
+
+- `cmd/api`: process startup, dependency wiring, HTTP server and graceful shutdown.
+- `internal/config`: environment loading and validation, including required secrets.
+- `internal/dto/request` and `internal/dto/response`: inbound request and outbound response contracts. The test-result payload remains JSON defined by the Python service.
+- `internal/handler`: HTTP contract binding, input validation and JSON responses.
+- `internal/middleware`: JWT authentication/authorization, CORS, rate limiting, body limits, request logs and security headers.
+- `internal/service`: orchestration of the test-results lookup.
+- `internal/repository/python`: HTTP integration with the Python service. There is no local database in this contract.
+- `internal/pkg/jwt` and `internal/pkg/requestid`: internal token parsing and request metadata utilities.
+- `api/openapi.yaml`: API specification.
+- `configs/example.env`: configuration template with a placeholder secret, not a real credential.
 
 To run locally, configure a secret and issuer:
 
@@ -58,7 +72,7 @@ To run locally, configure a secret and issuer:
 export JWT_SECRET="$(openssl rand -hex 32)"
 export JWT_ISSUER="tserver-local"
 export PYTHON_API_URL="http://127.0.0.1:8000/api/test-results"
-go120 run .
+go120 run ./cmd/api
 ```
 
 Issue access tokens through a trusted identity service. A read token must
