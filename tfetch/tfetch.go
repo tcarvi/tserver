@@ -33,13 +33,13 @@ func FetchBodyToScreen(url string) {
 }
 
 /*
-	FetchManyBodyToScreen method
-    A goroutine is a concurrent function execution.
-    A channel is a communication mechanism that allows
-      one goroutine to pass values of a specified type
-	  to another goroutine.
-    The function main() runs in a goroutine and
-      the go statement creates additional goroutines.
+		FetchManyBodyToScreen method
+	    A goroutine is a concurrent function execution.
+	    A channel is a communication mechanism that allows
+	      one goroutine to pass values of a specified type
+		  to another goroutine.
+	    The function main() runs in a goroutine and
+	      the go statement creates additional goroutines.
 */
 func FetchManyBodiesToScreen(urls []string) {
 	start := time.Now()
@@ -236,7 +236,7 @@ func mainExecution() {
 
 	// Verify typing of url
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stdout, "\nErro: Falta indicação de url.\n")
+		fmt.Fprint(os.Stdout, "\nErro: Falta indicação de url.\n")
 		os.Exit(1)
 	}
 

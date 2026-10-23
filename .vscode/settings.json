@@ -1,0 +1,11 @@
+{
+  "go.toolsEnvVars": {
+    "GOTOOLCHAIN": "go1.20.13"
+  },
+  "go.formatTool": "goimports",
+  "go.alternateTools": {
+    "gopls": "/Users/eduardosantosleal/go/1.20.13/bin/gopls",
+    "dlv": "/Users/eduardosantosleal/go/1.20.13/bin/dlv",
+    "goimports": "/Users/eduardosantosleal/go/1.20.13/bin/goimports"
+  }
+}
